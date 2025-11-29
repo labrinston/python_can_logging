@@ -331,3 +331,77 @@ class can2pwm():
                 userIDA = IDA,
                 userIDB = IDB
             )
+        
+        
+    # Message Type - 0x74
+    @dataclass
+    class TelemetrySettingsPacket:
+        """Base structure of Telemetry Message"""
+
+        period:    int     # 0        U8 [ms] 0-10s
+        silence:   int     # 1        U8 [ms] 0-10s
+        packets:   int     # 2        U8
+        statusA:   bool    # 2:7      B1
+        statusB:   bool    # 2:6      B1
+        _reserved: int = 0 # 2:5..2:0 B6
+
+        STATUS_A_BIT = 7 
+        STATUS_B_BIT = 6
+        MASK_RESERVED = 0x1F
+        MESSAGE_TYPE  = 0x74
+        # statusC: Optional[int] = None # reference
+
+        def __init__(self, period, silence, statusA, statusB, _reserved = 0, packets = 0):
+            # Validate user input
+            if period < 50 and period > 0 or period > 10000:
+                raise ValueError('Period is set in increments of 50ms. Minimum: 50ms | Maximum: 10,000ms')
+            if silence < 50 and silence > 0 or silence > 10000:
+                raise ValueError('Silence is set in increments of 50ms. Minimum: 50ms | Maximum: 10,000ms')
+            if not isinstance(statusA, bool):
+               raise ValueError('statusA may only be set via bool.')
+            if not isinstance(statusB, bool):
+               raise ValueError('statusB may only be set via bool.') 
+
+            self.period = period
+            self.silence = silence
+            self.statusA = statusA
+            self.statusB = statusB
+            self.packets = packets
+            self._reserved = _reserved
+            if self.statusA is True:
+                self.packets = set_bit(self.packets, self.STATUS_A_BIT)
+            if self.statusB is True:
+                self.packets = set_bit(self.packets, self.STATUS_B_BIT)
+
+        def to_can_bytes(self):
+            period_scaled = self.period // 50
+            silence_scaled = self.silence // 50
+            print(f"Period: {period_scaled} | Silence: {silence_scaled}")
+            if self.statusA is True:
+                self.packets = set_bit(self.packets, self.STATUS_A_BIT)
+            else:
+                self.packets = clear_bit(self.packets, self.STATUS_A_BIT)
+            if self.statusB is True:
+                self.packets = set_bit(self.packets, self.STATUS_B_BIT)
+            else:
+                self.packets = clear_bit(self.packets, self.STATUS_B_BIT)
+            print(f"Packets: {self.packets:04X}")    
+            data = bytearray(
+                    [period_scaled, silence_scaled, self.packets]
+                )
+            return data
+
+        @classmethod
+        def from_can_bytes(cls, data):
+            scaled_period  = data[0] * 50
+            scaled_silence = data[1] * 50 
+            packets_byte   = data[2]
+            return cls(
+                period         = scaled_period,
+                silence        = scaled_silence,
+                packets        = packets_byte,
+                statusA        = bool(get_bit(packets_byte, cls.STATUS_A_BIT)),
+                statusB        = bool(get_bit(packets_byte, 6)),
+                _reserved      = packets_byte & cls.MASK_RESERVED,
+            )
+    # ----- End Configuration Packets   ----- #
