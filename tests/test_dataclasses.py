@@ -77,5 +77,37 @@ class TestDataclasses(unittest.TestCase):
         
         self.assertEqual(decoded.userIDB, test_IDB,                        
                          f"\nExpected: {test_IDB:04X}\nGot: {decoded.userIDB:04X}")
+
+    def test_setNodeID(self):
+
+        # Test values
+        test_cmd = 0x50
+        test_serial = 0x174 # 371 in decimal
+        test_nodeID = 0x30 # 48 in decimal
+
+        # Values under test
+        original = icd.setNodeIDPacket(serialNumber = test_serial, nodeID = test_nodeID)
+        encoded  = original.to_can_bytes()
+        decoded  = icd.setNodeIDPacket.from_can_bytes(encoded)
+
+        print(f"Encoded: {encoded}")
+        print(f"Decoded: {decoded}")
+        # Expectations
+        expected_encoded = bytearray([0x50, 0x00, 0x00, 0x01, 0x74, 0x30])
+
+        # Test the encode
+        self.assertEqual(encoded, expected_encoded,
+                         f"\nExpected: {expected_encoded}\nGot: {encoded}")
+
+        # Test the decode
+        self.assertEqual(decoded.serialNumber, test_serial,
+                         f"\nExpected: {test_serial:04X}\nGot: {decoded.serialNumber:04X}")
+        
+        self.assertEqual(decoded.nodeID, test_nodeID,
+                         f"\nExpected: {test_nodeID:04X}\nGot: {decoded.nodeID:04X}")
+        
+        self.assertEqual(decoded.command, test_cmd,                        
+                         f"\nExpected: {test_cmd:04X}\nGot: {decoded.command:04X}")
+
 if __name__ == '__main__':
     unittest.main()
