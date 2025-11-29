@@ -122,3 +122,39 @@ class can2pwm():
         # If we want to return a string instead?
         # def to_csv_string(self):
         
+    @dataclass
+    class MultiCommandPacket:
+        """"""
+
+        commandA: int # 0..1 I16
+        commandB: int # 2..3 I16
+        commandC: int # 3..4 I16
+        commandD: int # 4..5 I16
+
+        MESSAGE_TYPE = 0x00
+        INPUT_LIM_POS = 20000
+        INPUT_LIM_NEG = -20000
+
+        def __init__(self, offset, commandA, commandB, commandC, commandD):
+
+            if not self.INPUT_LIM_NEG > commandA > self.INPUT_LIM_POS:
+                raise ValueError(f"commandA out of range: {commandA}. Min: {self.INPUT_LIM_NEG} Max: {self.INPUT_LIM_POS}")
+            if not self.INPUT_LIM_NEG > commandB > self.INPUT_LIM_POS:
+                raise ValueError(f"commandB out of range: {commandB}. Min: {self.INPUT_LIM_NEG} Max: {self.INPUT_LIM_POS}")
+            if not self.INPUT_LIM_NEG > commandC > self.INPUT_LIM_POS:
+                raise ValueError(f"commandC out of range: {commandC}. Min: {self.INPUT_LIM_NEG} Max: {self.INPUT_LIM_POS}")
+            if not self.INPUT_LIM_NEG > commandD > self.INPUT_LIM_POS:
+                raise ValueError(f"commandD out of range: {commandD}. Min: {self.INPUT_LIM_NEG} Max: {self.INPUT_LIM_POS}")
+
+            self.commandA = commandA
+            self.commandB = commandB
+            self.commandC = commandC
+            self.commandD = commandD
+
+        def to_can_bytes(self):
+            return bytearray([
+                *self.commandA.to_bytes(1, 'big', signed=True),
+                *self.commandB.to_bytes(1, 'big', signed=True),
+                *self.commandC.to_bytes(1, 'big', signed=True),
+                *self.commandD.to_bytes(1, 'big', signed=True)
+            ])
