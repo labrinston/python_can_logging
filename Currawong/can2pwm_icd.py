@@ -177,3 +177,71 @@ class can2pwm():
         #     """"""
 
     # ----- Eng Commands Packets        ----- #
+
+    # ----- Begin Status Packets      ----- #
+
+    # Message Type - 0x60
+    @dataclass
+    class statusAPacket(PacketBase):
+        """Base structure of the statusA Telemetry Packet"""
+
+        # Message fields (Instance variables)
+        status:        int            # 0..1     U16
+        inputMode:     'can2pwm.inputModes'     # 0:7..0:5 B3
+        feedbackMode:  'can2pwm.feedbackModes'  # 0:4..0:2 B3
+        validInput:    bool           # 0:1      B1
+        validFeedback: bool           # 0:0      B0
+        enabled:       bool           # 1:7      B1
+        reserved:      int            # 1:6..1:2 B5
+        mapEnabled:    bool           # 1:1      B1
+        mapInvalid:    bool           # 1:0      B1
+        command:       int            # 2..3     I16
+        feedback:      int            # 4..5     U16 Actual PWM value
+        pwm:           int            # 6..7     U16 [us]
+
+        # Class Variable
+        MESSAGE_TYPE = 0x60
+        # Masks & shifts 
+        # Status 0..1
+        # Byte 0
+        INPUT_MODE_MASK = 0xC0    # 0:7..0:5
+        INPUT_MODE_SHIFT = 5
+        FEEDBACK_MODE_MASK = 0x1B # 0:4..0:2
+        FEEDBACK_MODE_SHIFT = 2
+        VALID_INPUT_MASK = 0x2    # 0:1
+        VALID_INPUT_SHIFT = 1
+        VALID_FEEDBACK_MASK = 0x1 # 0:0
+        VALID_FEEDBACK_SHIFT = 0
+        # Byte 1
+        ENABLED_MASK = 0x8000     # 1:7
+        ENABLED_SHIFT = 15
+        RESERVED_MASK = 0x7C00     # 1:6..1:2
+        RESEREVED_SHIFT = 10
+        MAP_ENABLED_MASK = 0x200  # 1:1
+        MAP_ENABLED_SHIFT = 9
+        MAP_INVALID_MASK = 0x100  # 1:0
+        MAP_INVALID_SHIFT = 8
+
+        # Telemetry is only received therefore no to_bytes method is needed
+        # EXCEPT - if you're polling, in which case data = []
+
+        @classmethod
+        def from_can_bytes(cls, data):
+            status_value   = int.from_bytes(data[0:2], 'big')
+            command_value  = int.from_bytes(data[2:4], 'big')
+            feedback_value = int.from_bytes(data[4:6], 'big')
+            pwm_value      = int.from_bytes(data[6:8], 'big')
+            return cls(
+                status         = status_value,
+                inputMode      = get_bits(status_value, cls.INPUT_MODE_MASK, cls.INPUT_MODE_SHIFT),
+                feedbackMode   = get_bits(status_value, cls.FEEDBACK_MODE_MASK, cls.FEEDBACK_MODE_SHIFT),
+                validInput     = bool(get_bit(status_value, 1)),
+                validFeedback  = bool(get_bit(status_value, 0)),
+                enabled        = bool(get_bit(status_value, 15)),
+                reserved       = get_bits(status_value,cls.RESERVED_MASK, 2),
+                mapEnabled     = bool(get_bit(status_value, 9)),
+                mapInvalid     = bool(get_bit(status_value, 8)),
+                command        = command_value,
+                feedback       = feedback_value,
+                pwm            = pwm_value
+            )
