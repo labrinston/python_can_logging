@@ -245,3 +245,48 @@ class can2pwm():
                 feedback       = feedback_value,
                 pwm            = pwm_value
             )
+
+    # Message Type - 0x61
+    @dataclass
+    class statusBPacket(PacketBase):
+        """statusA Telemetry Packet
+
+        0..1 Current I16 10mA per bit
+        2..3 Voltage U16 10mV per bit
+        """
+        # Message data (instance variables)
+        current: int # 0..1 I16 [mA]
+        voltage: int # 2..3 U16 [mV]
+
+        # Masks & shifts (class variables)
+        MESSAGE_TYPE = 0x61
+        PACKET_LEN = 4
+
+        def to_can_bytes(self):
+
+            # 1. Scale to 10mA/mV per bit
+            # // floor divide
+            current_scaled = self.current  // 10 
+            voltage_scaled = self.voltage // 10
+
+            # 2. Handle current sign - bitwise & will treat negatives appropriately
+            current_bytes = current_scaled & 0xFFFF
+
+            data = bytearray([
+                *current_scaled.to_bytes(2, "big", signed=True),
+                *voltage_scaled.to_bytes(2, 'big', signed=False)
+            ])
+            return data
+
+        @classmethod
+        def from_can_bytes(cls, data):
+            current_scaled = int.from_bytes(data[0:2], 'big', signed=True) * 10
+            voltage_scaled = int.from_bytes(data[2:4], 'big', signed=False) * 10
+
+            # voltage_scaled = voltage_raw * 10
+            # current_scaled = current_raw
+            return cls(
+                current = current_scaled,
+                voltage = voltage_scaled
+            )
+    # ----- Eng Status Packets        ----- #
