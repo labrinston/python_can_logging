@@ -290,3 +290,44 @@ class can2pwm():
                 voltage = voltage_scaled
             )
     # ----- Eng Status Packets        ----- #
+
+    # ----- Begin Configuration Packets ----- #
+
+    # serialNumberPacket
+    # Message Type - 0x70
+    @dataclass
+    class serialNumberPacket:
+        """Base structure of Telemetry Message"""
+        hwRev:int = None       # 0    U8
+        serialNumber:int = None # 1..3 U24
+        userIDA:int     = None # 4..5 U16
+        userIDB:int     = None # 6..7 U16
+
+        message_type = 0x70
+
+        def to_can_bytes(self):
+            """Converts from internal dataclass values to big endian bytearray."""
+            return bytearray([
+                # 0
+                *(self.hwRev).to_bytes(1, 'big'),
+                # 1..3
+                *(self.serialNumber).to_bytes(3, 'big'),
+                # 4..5
+                *(self.userIDA).to_bytes(2, 'big'),
+                *(self.userIDB).to_bytes(2, 'big')
+            ])
+
+
+        @classmethod
+        def from_can_bytes(cls, data):
+            """Converts from bytearray to dataclass internal varialbes."""
+            hw     = data[0]
+            serial = int.from_bytes(data[1:4], 'big')
+            IDA    = int.from_bytes(data[4:6], 'big')
+            IDB    = int.from_bytes(data[6:8], 'big')
+            return cls(
+                hwRev = hw,
+                serialNumber = serial,
+                userIDA = IDA,
+                userIDB = IDB
+            )
