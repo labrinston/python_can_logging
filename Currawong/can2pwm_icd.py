@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
-from can import Message
+from can import Listener, Message
 import dataclasses
 from dataclasses import dataclass
 from enum import Enum
+import csv
 
 # Currawong Message format:
 #
@@ -68,6 +69,149 @@ class can2pwm():
         PWM_COMMAND = 0x10
         HOME_COMMAND = 0x15
         DISABLE_PACKET = 0x20
+
+    class PrintListener(Listener):
+        def on_message_received(self, msg: Message) -> None:
+           """Simple example of a print listener."""
+           print(f"Rx: {msg}")
+
+        def __call__(self, msg: Message) -> None:
+            self.on_message_received(msg)
+
+        def on_error(self, exc: Exception) -> None:
+            raise NotImplementedError()
+
+        
+    class CSVListener(Listener):
+        # Use init to pass things to listener as on_message_recieved can only accept msg
+
+        # Default log config
+        # TODO the ergonomics of this _must_ be improved. Having to filled out the csv_ variables should
+        # not be necessary they should just be initialized to 0 by default
+        LOG_CONFIG = {
+            'statusAPacket': {'enabled': True, "fields": ['feedback', 'command'],
+                              "csv_beg": 0, "csv_end": 0, 'csv_leader': 0, 'csv_trailer': 0},
+            'statusBPacket': {'enabled': True, 'fields': ['current', 'voltage'],
+                              'csv_beg': 0, 'csv_end': 0, 'csv_leader': 0, 'csv_trailer': 0}
+        }
+
+        # Use init to inject additional objects
+        def __init__(self, log_dir):
+            # self.message_registry = message_registry
+            self.log_dir = log_dir
+            self.csv_files = {}
+
+            self._setup_table()            
+
+            print(f"{self.LOG_CONFIG}")
+            # Open file
+            # Write headers
+                
+        def _setup_table(self):
+            """Creates csv header and calculates csv leaders and trailers for each packet that is configured to
+            be logged."""
+
+            # This should probably just be a class variable
+            message_registry_by_name = {cls.__name__: cls for cls in can2pwm.message_registry.values()}
+            
+            # Header setup
+            beg = 1
+            end = 0
+            headers = []
+            for packet_name, config in self.LOG_CONFIG.items():
+
+                print(f"Config: {packet_name} with {config}")
+                if not config.get('enabled', True):
+                    continue
+
+                PacketClass = message_registry_by_name.get(packet_name)
+                print(f"Retrieved class: {PacketClass}")
+                if not PacketClass:
+                    continue
+
+                # Get fields config
+                fields = config.get('fields', None)
+                print(f"Fields to apply: {fields}")
+
+                # Concatenate headers
+                headers += PacketClass.csv_header(fields) 
+                print(f"Headers: {headers}")
+                self.LOG_CONFIG[packet_name]['csv_beg'] = beg
+                self.LOG_CONFIG[packet_name]['csv_end'] = len(headers)
+                beg = self.LOG_CONFIG[packet_name]['csv_end'] + 1
+
+            table_len = len(headers)
+            print(f"Table length: {table_len}")
+            # Loop again and set csv_leader/csv_trailer
+            for packet_name, config in self.LOG_CONFIG.items():
+                self.LOG_CONFIG[packet_name]['csv_leader'] = (self.LOG_CONFIG[packet_name]['csv_beg'] - 1) * ','
+                self.LOG_CONFIG[packet_name]['csv_trailer'] = (table_len - self.LOG_CONFIG[packet_name]['csv_end']) * ',' 
+
+        def on_message_received(self, msg):
+
+            # Parse the CAN ID
+            device_type = (msg.arbitration_id >> 8) & 0xFF
+            device_addr = msg.arbitration_id & 0xFF
+            msg_type = (msg.arbitration_id >> 16) & 0xFF
+
+            # Check if the message is from a can2pwm device
+            device_type = (msg.arbitration_id >> 8) & 0xFF
+            # print(f"Device type: {device_type}")
+            if device_type != can2pwm.DEVICE_TYPE:
+                return
+
+            # Check that we have a data class to decode the data
+            PacketClass = can2pwm.message_registry.get(msg_type)
+            # print(f"Packet Class: {PacketClass}")
+            if not PacketClass:
+                print(f"Unknown message type: {msg_type}")
+                return
+
+            # Decode the data
+            packet = PacketClass.from_can_bytes(msg.data)
+            # print(f"Packet: {packet}")
+
+            packet_name = PacketClass.__name__
+            config = self.LOG_CONFIG.get(packet_name, {})
+
+            if not config.get('enabled', True):
+                return
+
+            # Move this to Packet class method
+            fields_to_log = config.get('fields', None)
+
+            csv_data = packet.to_csv(fields_to_log)
+            csv_str = config['csv_leader'] + ",".join(csv_data) + config['csv_trailer']
+
+            # print(f"Logging {packet_name}: fields={fields_to_log}, packet={packet}")
+            print(f"Logging: {csv_data}")            
+            print(f"Logging: {csv_str}")
+
+            # Actually log to file here
+
+            
+        def __call__(self, msg: Message) -> None:
+            self.on_message_received(msg)
+ 
+    #     def _log_packet(self, device_addr, msg_type, packet, timestamp):
+
+    #         if packet.LOG_FIELD is None:
+    #             fields = {k: v for k, v in packet.__dict__items()
+    #                       if not k.startswith('_')}
+    #         else:
+    #             fields = { k: getattr(packet, k) for k in packet.LOG_FIELDS}
+
+    #         row = [timestamp, device_addr, msg_type, fields.values()]
+    #         self.csv_writer.writerow(row)
+            
+                
+        # def stop(self):
+        #     # Do clean up here
+
+        def on_error(self, exc: Exception) -> None:
+            raise NotImplementedError()
+
+
     @dataclass
     class PacketBase:
         """Base class for Currawong CANbus data packets"""
@@ -442,3 +586,12 @@ class can2pwm():
             )
 
     # ----- End System Command Packets  ----- #
+
+
+    # can2pwm message registry
+    message_registry = {
+        0x10: PWMCommandPacket,
+        0x60: statusAPacket,
+        0x61: statusBPacket
+    }
+
