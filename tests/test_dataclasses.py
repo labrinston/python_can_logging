@@ -109,5 +109,30 @@ class TestDataclasses(unittest.TestCase):
         self.assertEqual(decoded.command, test_cmd,                        
                          f"\nExpected: {test_cmd:04X}\nGot: {decoded.command:04X}")
 
+    def test_TelemetrySettingsPacket(self):
+        # Test values
+        test_period  = 50
+        test_silence = 50
+        test_statusA = True
+        test_statusB = True
+        test_packets = 0xC0
+
+        # Expected values
+        # 50ms per bit => 0x01 for period & silence
+        # statusA & statusB enabled => 8 + 4 = 12 = 0xC0
+        expected_encoded = bytearray([0x01, 0x01, 0xC0])
+
+        original = icd.TelemetrySettingsPacket(test_period, test_silence,
+                                               test_statusA, test_statusB)
+        encoded = original.to_can_bytes()
+        decoded = icd.TelemetrySettingsPacket.from_can_bytes(encoded)
+
+        # Test the encode
+        self.assertEqual(encoded, expected_encoded)
+        self.assertEqual(decoded.period, test_period)
+        self.assertEqual(decoded.silence, test_silence)
+        self.assertEqual(decoded.statusA, True)
+        self.assertEqual(decoded.statusB, True)
+
 if __name__ == '__main__':
     unittest.main()
