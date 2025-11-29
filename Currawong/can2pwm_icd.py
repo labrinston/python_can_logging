@@ -405,3 +405,40 @@ class can2pwm():
                 _reserved      = packets_byte & cls.MASK_RESERVED,
             )
     # ----- End Configuration Packets   ----- #
+    # ----- System Command Packets      ----- #
+    @dataclass
+    class setNodeIDPacket:
+        """Base structure of Set Node ID Packet"""
+
+        command:      int        # 0    U8
+        serialNumber: int        # 1..4 U32 <-- wtf SerialNumber packet is U24??
+        nodeID:       int        # 5    U8
+        # timestamp:    int        # TODO figure out correct type
+
+        MESSAGE_TYPE  = 0x50
+        COMMAND       = 0x50
+        PACKET_LENGTH = 5 # bytes
+
+        def __init__(self, serialNumber, nodeID, command = 0x50):
+            self.command      = command
+            self.serialNumber = serialNumber
+            self.nodeID       = nodeID
+
+        def to_can_bytes(self):
+            data = bytearray([
+                self.command,
+                     *self.serialNumber.to_bytes(4, 'big'),
+                     *self.nodeID.to_bytes(1, 'big')
+                     ])
+            return data
+
+        @classmethod
+        def from_can_bytes(cls, data):
+            serial = int.from_bytes(data[1:5], 'big')
+            return cls(
+                command=data[0],
+                serialNumber= serial,
+                nodeID=data[5]
+            )
+
+    # ----- End System Command Packets  ----- #
