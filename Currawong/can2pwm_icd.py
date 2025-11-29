@@ -13,6 +13,35 @@ from enum import Enum
 # | 5 bits  | 8 bits       | 8 bits      | 8 bits         |
 # +---------+--------------+-------------+----------------+
 
+GROUP_ID_SHIFT = 24
+GROUP_ID_MASK = 0xFF000000
+MESSAGE_TYPE_SHIFT = 16
+MESSAGE_TYPE_MSK = 0x00FF0000
+DEVICE_TYPE_SHIFT = 8
+DEVICE_ADDRESS_MASK = 0xFF
+ # --- Helpers --- #
+
+# -- Bits
+def get_bit(field: int, bit_position: int) -> int:
+    return (field >> bit_position) & 0x1
+
+def set_bit(field: int, bit_position: int) -> int:
+    """Set specific bits in a field to a value."""
+    mask = (1 << bit_position)
+    return (field & ~mask) | mask
+
+def clear_bit(field: int, bit_position: int) -> int:
+    """Set specific bits in a field to a value."""
+    mask = (0 << bit_postion)
+    return field & (0 << bit_position)
+
+def get_bits(field: int, mask: int, shift: int) -> int:
+    return (field & mask) >> shift
+
+def set_bits(field: int, value: int, mask: int, shift: int) -> int:
+    """Set specific bits in a field to a value."""
+    return (field & ~mask) | ((value << shift) & mask)
+
 class can2pwm():
 
     DEVICE_TYPE = 0x0A 
