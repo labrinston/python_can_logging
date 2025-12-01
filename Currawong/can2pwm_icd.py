@@ -5,6 +5,10 @@ import dataclasses
 from dataclasses import dataclass
 from enum import Enum
 import csv
+import logging
+import os
+
+logger = logging.getLogger(__name__)
 
 # Currawong Message format:
 #
@@ -132,13 +136,19 @@ class can2pwm():
                 for name, cfg in self.log_config.items():
                     print(f"  {name}: type={type(cfg)}, value={cfg}")
             
-
             print(f"Applying the following logging config:")
             print(f"{self.log_config}")
-            self._setup_table()            
+            header_row = self._setup_table()            
 
             # Open file
+            os.makedirs(self.log_dir, exist_ok=True)
+
+            self.csv_file = open(f"{self.log_dir}/can2pwm_log.csv", 'w', newline='')
+            self.csv_writer = csv.writer(self.csv_file) 
+            
             # Write headers
+            print(f"Printing Headers: {header_row}")
+            self.csv_writer.writerow(header_row) 
 
         def _setup_table(self):
             """Creates csv header and calculates csv leaders and trailers for each packet that is configured to
@@ -148,9 +158,9 @@ class can2pwm():
             message_registry_by_name = {cls.__name__: cls for cls in can2pwm.message_registry.values()}
             
             # Header setup
-            beg = 1
+            headers = ["timestamp"]
+            beg = len(headers)
             end = 0
-            headers = []
             for packet_name, config in self.log_config.items():
 
                 print(f"Config: {packet_name} with {config}")
@@ -173,19 +183,21 @@ class can2pwm():
                 # Store position information in config
                 config._csv_beg = beg
                 config._csv_end = len(headers)
-                beg = config._csv_end + 1
+                beg = config._csv_end # next
 
             table_len = len(headers)
             print(f"Table length: {table_len}")
             
             # Loop again and set csv_leader/csv_trailer
             for packet_name, config in self.log_config.items():
-                config._csv_leader = (config._csv_beg - 1) * ','
-                config._csv_trailer = (table_len - config._csv_end ) * ','
+                config._csv_leader = (config._csv_beg - 1) * ['']
+                config._csv_trailer = (table_len - config._csv_end) * ['']
 
             print("At END of _setup_table:")
             for name, cfg in self.log_config.items():
                 print(f"  {name}: type={type(cfg)}")
+
+            return headers
                
         def on_message_received(self, msg):
 
@@ -212,11 +224,11 @@ class can2pwm():
             # print(f"Packet: {packet}")
 
             packet_name = PacketClass.__name__
-            print(f"Packet Name: {packet_name}")
-            print(f"Log config: {self.log_config}")
-            print(f"Log config: {self.log_config.get}")
+            # print(f"Packet Name: {packet_name}")
+            # print(f"Log config: {self.log_config}")
+            # print(f"Log config: {self.log_config.get}")
             config = self.log_config.get(packet_name, {})
-            print(f"{config}")
+            # print(f"{config}")
 
             # if not config.get('enabled', True):
             # if self.config or not self.config.enabled:
@@ -226,18 +238,24 @@ class can2pwm():
             fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
-            csv_str = config._csv_leader + ",".join(csv_data) + config._csv_trailer
+            csv_str = [msg.timestamp] + config._csv_leader + csv_data + config._csv_trailer
+            print(f"CSV str to write: {csv_str}")
+
 
             # print(f"Logging {packet_name}: fields={fields_to_log}, packet={packet}")
-            print(f"Logging: {csv_data}")            
-            print(f"Logging: {csv_str}")            
+            # print(f"Logging: {csv_data}")            
+            # print(f"Logging: {csv_str}")            
 
+            # Write to file here
+            self.csv_writer.writerow(csv_str)
+            self.csv_file.flush()
             
         def __call__(self, msg: Message) -> None:
             self.on_message_received(msg)            
                 
-        # def stop(self):
-        #     # Do clean up here
+        def stop(self):
+            # Do clean up here
+            self.csv_file.close()
 
         def on_error(self, exc: Exception) -> None:
             raise NotImplementedError()
