@@ -7,6 +7,7 @@ from enum import Enum
 import csv
 import logging
 import os
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -643,3 +644,71 @@ class can2pwm():
         0x61: statusBPacket
     }
 
+
+# ---- Helper Methods --------- #
+
+    def make_message(packet, nodeID):
+        can_id = (0x07 << 24) | (packet.MESSAGE_TYPE << 16) | (0x0A << 8) | nodeID
+        message = Message(arbitration_id=can_id, data=packet.to_can_bytes())
+        return message
+        
+    def discover_devices(bus):
+        """Discovers devices of DEVICE_TYPE connected to BUS by broadcast of a request for serial number.
+        args:
+             - device_type: The Currawong device ID field to broadcast too
+        returns:
+             - Device tuple in the form : [(serial_number, device_address)]
+        """
+
+        # ?Setup filter for serialNumber packets?
+ 
+        # Setup broadcast of SerialNumber packet
+
+        broadcast_id = 0xFF
+        device_type = (0x0A << 8)  # TODO replace with enum
+        can_id_base = 0x07700000 | device_type
+        can_id = can_id_base | broadcast_id
+        msg = Message(arbitration_id = can_id, data = [])
+
+        # Broadcast the message
+        bus.send(msg)
+
+        # Listen for responses for 2 seconds
+        seen_serials = set()
+        devices_tuple = []
+        start = time.time()
+        while time.time() - start < 2:
+            try:
+                rx_msg = bus.recv(timeout=0.1)  # 100ms timeout
+            except can.CanOperationError as e:
+                print(f"Error sending: {e}")
+ 
+            if rx_msg is None:
+                # print(f"No devices responded too: {can_id}")
+                continue
+
+            # Need to validate that the packet we're checking is a serialNumberPacket
+            addr = rx_msg.arbitration_id & 0xFFFFFF00
+            print(f"addr: {addr:04X}")
+            if addr == can_id_base:
+                packet = can2pwm.serialNumberPacket.from_can_bytes(rx_msg.data)
+                if packet.serialNumber not in seen_serials:
+                    print(f"Fresh out of the packet: {packet.serialNumber:04X}")
+                    seen_serials.add(packet.serialNumber)
+                    # Only add to our device list if it's a new serial number 
+                    print(f"can ID: {rx_msg.arbitration_id:X} | addr: {addr:X}")
+                    deviceID = rx_msg.arbitration_id & 0xFF
+                    print(f"deviceID: {deviceID:X}")
+                    devices_tuple.append((packet.serialNumber, deviceID))
+                    # COULD create devices here?
+
+
+        # Notify user if we didn't find any devices        
+        if devices_tuple is None:
+            print(f"No devices responded to: {can_id:X}")
+        
+        # ?Clear filters?
+        # bus.set_filters(filters = None)
+
+        return devices_tuple
+# ------------------------------ #
