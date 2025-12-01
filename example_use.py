@@ -10,9 +10,15 @@ bus = can.Bus(channel = 'can0', interface='socketcan')
 # Windows
 # bus = can.Bus(channel = '?', interface='pcan') # TODO channel param for windows
 
+# Create logging config (Note: this only applies to the can2pwm CSVListener)
+log_config = {
+    'statusAPacket': can2pwm.PacketLogConfig(enabled=True, fields=['feedback', 'command']),
+    'statusBPacket': can2pwm.PacketLogConfig(enabled=True, fields=['current', 'voltage'])
+}
+
 # Request listeners from the can2pwm module
 print_listener = can2pwm.PrintListener()
-csv_listener = can2pwm.CSVListener(log_dir="./")
+csv_listener = can2pwm.CSVListener(log_dir="./", log_config=log_config)
 
 # Provide the csv_listener to the notifier
 # Reception and logging of CAN messages will be handled by a separate thread

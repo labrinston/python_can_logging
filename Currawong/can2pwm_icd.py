@@ -45,7 +45,8 @@ def set_bits(field: int, value: int, mask: int, shift: int) -> int:
 
 class can2pwm():
 
-    DEVICE_TYPE = 0x0A 
+    DEVICE_TYPE = 0x0A
+ 
     # --- Enums --- #
 
     class deviceType(Enum):
@@ -81,32 +82,64 @@ class can2pwm():
         def on_error(self, exc: Exception) -> None:
             raise NotImplementedError()
 
+    @dataclass 
+    class PacketLogConfig():
+        enabled: bool = True
+        fields: list = None
+        _csv_beg: int = 0
+        _csv_end: int = 0
+        _csv_leader: str = ""
+        _csv_trailer:str = ""
         
     class CSVListener(Listener):
-        # Use init to pass things to listener as on_message_recieved can only accept msg
-
-        # Default log config
-        # TODO the ergonomics of this _must_ be improved. Having to filled out the csv_ variables should
-        # not be necessary they should just be initialized to 0 by default
-        LOG_CONFIG = {
-            'statusAPacket': {'enabled': True, "fields": ['feedback', 'command'],
-                              "csv_beg": 0, "csv_end": 0, 'csv_leader': 0, 'csv_trailer': 0},
-            'statusBPacket': {'enabled': True, 'fields': ['current', 'voltage'],
-                              'csv_beg': 0, 'csv_end': 0, 'csv_leader': 0, 'csv_trailer': 0}
-        }
-
+        """
+        Custom CSV listener that allows packet level logging configuration.
+        Can specify:
+        - What packets to log
+        - What fields in those packets to log
+        - Log file name
+        """
         # Use init to inject additional objects
-        def __init__(self, log_dir):
+        def __init__(self, log_dir, log_config = None):
+            """
+
+            args:
+                - log_config: A dict of a PacketLogConfig objects
+            """
             # self.message_registry = message_registry
             self.log_dir = log_dir
             self.csv_files = {}
 
+            # Add optional flexibility here
+            # Dict -> Dataclass conversion?
+
+            # If no config was passed, use the default
+            if log_config is None:
+                self.log_config ={
+                    'statusAPacket': can2pwm.PacketLogConfig(enabled=True, fields=['feedback', 'command']),
+                    'statusBPacket': can2pwm.PacketLogConfig(enabled=True, fields=['current', 'voltage']) 
+                }
+            else:
+                # Otherwise 
+                self.log_config = {
+                    # Handle:
+                    # 1. Plain Dicts - via dict comprehension to unpack (**) into a dataclass
+                    # 2, Dict of datclasses - use as is and log into self
+                    name: can2pwm.PacketLogConfig(**cfg) if isinstance(cfg, dict) else cfg
+                    for name, cfg in log_config.items()
+                }
+                print("After conversion:")
+                for name, cfg in self.log_config.items():
+                    print(f"  {name}: type={type(cfg)}, value={cfg}")
+            
+
+            print(f"Applying the following logging config:")
+            print(f"{self.log_config}")
             self._setup_table()            
 
-            print(f"{self.LOG_CONFIG}")
             # Open file
             # Write headers
-                
+
         def _setup_table(self):
             """Creates csv header and calculates csv leaders and trailers for each packet that is configured to
             be logged."""
@@ -118,10 +151,10 @@ class can2pwm():
             beg = 1
             end = 0
             headers = []
-            for packet_name, config in self.LOG_CONFIG.items():
+            for packet_name, config in self.log_config.items():
 
                 print(f"Config: {packet_name} with {config}")
-                if not config.get('enabled', True):
+                if not config.enabled:
                     continue
 
                 PacketClass = message_registry_by_name.get(packet_name)
@@ -130,23 +163,30 @@ class can2pwm():
                     continue
 
                 # Get fields config
-                fields = config.get('fields', None)
-                print(f"Fields to apply: {fields}")
+                fields = config.fields
+                # print(f"Fields to apply: {fields}")
 
                 # Concatenate headers
                 headers += PacketClass.csv_header(fields) 
                 print(f"Headers: {headers}")
-                self.LOG_CONFIG[packet_name]['csv_beg'] = beg
-                self.LOG_CONFIG[packet_name]['csv_end'] = len(headers)
-                beg = self.LOG_CONFIG[packet_name]['csv_end'] + 1
+
+                # Store position information in config
+                config._csv_beg = beg
+                config._csv_end = len(headers)
+                beg = config._csv_end + 1
 
             table_len = len(headers)
             print(f"Table length: {table_len}")
+            
             # Loop again and set csv_leader/csv_trailer
-            for packet_name, config in self.LOG_CONFIG.items():
-                self.LOG_CONFIG[packet_name]['csv_leader'] = (self.LOG_CONFIG[packet_name]['csv_beg'] - 1) * ','
-                self.LOG_CONFIG[packet_name]['csv_trailer'] = (table_len - self.LOG_CONFIG[packet_name]['csv_end']) * ',' 
+            for packet_name, config in self.log_config.items():
+                config._csv_leader = (config._csv_beg - 1) * ','
+                config._csv_trailer = (table_len - config._csv_end ) * ','
 
+            print("At END of _setup_table:")
+            for name, cfg in self.log_config.items():
+                print(f"  {name}: type={type(cfg)}")
+               
         def on_message_received(self, msg):
 
             # Parse the CAN ID
@@ -172,45 +212,35 @@ class can2pwm():
             # print(f"Packet: {packet}")
 
             packet_name = PacketClass.__name__
-            config = self.LOG_CONFIG.get(packet_name, {})
+            print(f"Packet Name: {packet_name}")
+            print(f"Log config: {self.log_config}")
+            print(f"Log config: {self.log_config.get}")
+            config = self.log_config.get(packet_name, {})
+            print(f"{config}")
 
-            if not config.get('enabled', True):
-                return
+            # if not config.get('enabled', True):
+            # if self.config or not self.config.enabled:
+            #     return
 
             # Move this to Packet class method
-            fields_to_log = config.get('fields', None)
+            fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
-            csv_str = config['csv_leader'] + ",".join(csv_data) + config['csv_trailer']
+            csv_str = config._csv_leader + ",".join(csv_data) + config._csv_trailer
 
             # print(f"Logging {packet_name}: fields={fields_to_log}, packet={packet}")
             print(f"Logging: {csv_data}")            
-            print(f"Logging: {csv_str}")
-
-            # Actually log to file here
+            print(f"Logging: {csv_str}")            
 
             
         def __call__(self, msg: Message) -> None:
-            self.on_message_received(msg)
- 
-    #     def _log_packet(self, device_addr, msg_type, packet, timestamp):
-
-    #         if packet.LOG_FIELD is None:
-    #             fields = {k: v for k, v in packet.__dict__items()
-    #                       if not k.startswith('_')}
-    #         else:
-    #             fields = { k: getattr(packet, k) for k in packet.LOG_FIELDS}
-
-    #         row = [timestamp, device_addr, msg_type, fields.values()]
-    #         self.csv_writer.writerow(row)
-            
+            self.on_message_received(msg)            
                 
         # def stop(self):
         #     # Do clean up here
 
         def on_error(self, exc: Exception) -> None:
             raise NotImplementedError()
-
 
     @dataclass
     class PacketBase:
