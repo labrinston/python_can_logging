@@ -105,7 +105,7 @@ class can2pwm():
         - Log file name
         """
         # Use init to inject additional objects
-        def __init__(self, log_dir, log_config = None):
+        def __init__(self, log_dir, log_name, log_config = None):
             """
 
             args:
@@ -113,6 +113,7 @@ class can2pwm():
             """
             # self.message_registry = message_registry
             self.log_dir = log_dir
+            self.log_name = log_name
             self.csv_files = {}
 
             # Add optional flexibility here
@@ -144,7 +145,7 @@ class can2pwm():
             # Open file
             os.makedirs(self.log_dir, exist_ok=True)
 
-            self.csv_file = open(f"{self.log_dir}/can2pwm_log.csv", 'w', newline='')
+            self.csv_file = open(f"{self.log_dir}/{self.log_name}.csv", 'w', newline='')
             self.csv_writer = csv.writer(self.csv_file) 
             
             # Write headers
