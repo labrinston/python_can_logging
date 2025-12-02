@@ -158,46 +158,67 @@ class can2pwm():
 
             # This should probably just be a class variable
             message_registry_by_name = {cls.__name__: cls for cls in can2pwm.message_registry.values()}
+            default_headers = ["timestamp", "CAN-ID"] # Must be prepended _after_ header setup
             
-            # Header setup
-            headers = ["timestamp"]
-            beg = len(headers)
+            # Dynamic Header Setup
+            #  0 1 2 3 4 5  Index
+            # |P|P|X|X|N|N|
+            #  1 2 3 4 5 6  Length
+            #      ^ ^-- end
+            #      |---- beg(in)
+            #
+            # where.
+            # P,X,N - some set of specified fields
+            #
+            # leader - # of empty cells to be prepended to a field
+            # = beg
+            # trailer - # of empty cells to be appended to a field 
+            # = len(table) - beg 
+            headers = []
+            beg = 0
             end = 0
             for packet_name, config in self.log_config.items():
 
-                print(f"Config: {packet_name} with {config}")
+                # print(f"Config: {packet_name} with {config}")
                 if not config.enabled:
                     continue
 
                 PacketClass = message_registry_by_name.get(packet_name)
-                print(f"Retrieved class: {PacketClass}")
+                logger.debug(f"Setting up: {PacketClass}")
+                # print(f"Retrieved class: {PacketClass}")
                 if not PacketClass:
                     continue
 
                 # Get fields config
                 fields = config.fields
                 # print(f"Fields to apply: {fields}")
+                logger.debug(f"Fields: {fields}")
 
                 # Concatenate headers
                 headers += PacketClass.csv_header(fields) 
-                print(f"Headers: {headers}")
+                # print(f"Headers: {headers}")
 
                 # Store position information in config
                 config._csv_beg = beg
                 config._csv_end = len(headers)
                 beg = config._csv_end # next
+                print(f"beg: {beg} | csv_beg: {config._csv_beg} | csv_end: {config._csv_end}")
+                print(f"Config: {packet_name} with {config}")
 
             table_len = len(headers)
             print(f"Table length: {table_len}")
             
             # Loop again and set csv_leader/csv_trailer
             for packet_name, config in self.log_config.items():
-                config._csv_leader = (config._csv_beg - 1) * ['']
+                config._csv_leader = (config._csv_beg ) * ['']
                 config._csv_trailer = (table_len - config._csv_end) * ['']
 
             print("At END of _setup_table:")
             for name, cfg in self.log_config.items():
                 print(f"  {name}: type={type(cfg)}")
+
+            # Attach default headers:
+            headers =  default_headers + headers
 
             return headers
                
@@ -226,7 +247,8 @@ class can2pwm():
             # print(f"Packet: {packet}")
 
             packet_name = PacketClass.__name__
-            # print(f"Packet Name: {packet_name}")
+            print(f"Packet Name: {packet_name}")
+            print(f"Packet Data: {packet}")
             # print(f"Log config: {self.log_config}")
             # print(f"Log config: {self.log_config.get}")
             config = self.log_config.get(packet_name, {})
@@ -240,7 +262,8 @@ class can2pwm():
             fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
-            csv_str = [msg.timestamp] + config._csv_leader + csv_data + config._csv_trailer
+            defaults = [msg.timestamp] + [msg.arbitration_id]
+            csv_str = defaults + config._csv_leader + csv_data + config._csv_trailer
             print(f"CSV str to write: {csv_str}")
 
 
@@ -292,29 +315,6 @@ class can2pwm():
                 return [f"{getattr(self, f.name)}" for f in dataclasses.fields(self)]
             else:
                 return [f"{getattr(self, field)}" for field in fields]
-
-        # def to_csv_row(self, include_timestamp=True):
-
-        #     if self.LOG_FIELDS is None:
-        #         fields = [v for k, v in self.__dict__.items() if not k.startswith('_')]
-        #     else:
-        #         fields = [getattr(self, field) for field in self.LOG_FIELDS]
-        #     return fields
-
-        # @classmethod
-        # def csv_header(cls):
-        #     """Return CSV header as a list"""
-
-        #     if cls.LOG_FIELDS is None:
-        #         # Get all fields            
-        #         fields = [ f.name for f in dataclasses.fields(cls) ]
-        #     else:
-        #         fields = cls.LOG_FIELDS
-
-        #     return fields
-
-        # If we want to return a string instead?
-        # def to_csv_string(self):
         
     @dataclass
     class MultiCommandPacket:
