@@ -9,6 +9,8 @@ from Currawong.can2pwm_icd import can2pwm
 # Setup the bus
 # Linux
 bus = can.Bus(channel = 'can0', interface='socketcan')
+bus = can.Bus(channel = 'can0', interface='socketcan', receive_own_messages=True)
+
 # Windows
 # bus = can.Bus(channel = '?', interface='pcan') # TODO channel param for windows
 
@@ -23,6 +25,7 @@ new_ids = [ 0x23, 0x44 ]
 for serial_num, curr_id in dev_tuple:
     for new_id in new_ids:
         packet = can2pwm.setNodeIDPacket(serial_num, new_id)
+        print(f"Packet: {packet}")
         message = can2pwm.make_message(packet, curr_id)
         print(f"setNodeID: {message}")
         bus.send(message)
@@ -39,16 +42,19 @@ print(f"{telem_message}")
 bus.send(telem_message)
        
 # ---- Listener Setup ---- #
+# Turn own receiving own messages
+# bus.receive_own_messages=True    
 
 # Create logging config (Note: this only applies to the can2pwm CSVListener)
 log_config = {
+    'PWMCommandPacket': can2pwm.PacketLogConfig(enabled=True, fields=['pwm']),
     'statusAPacket': can2pwm.PacketLogConfig(enabled=True, fields=['feedback', 'command']),
     'statusBPacket': can2pwm.PacketLogConfig(enabled=True, fields=['current', 'voltage'])
 }
 
 # Request listeners from the can2pwm module
 print_listener = can2pwm.PrintListener()
-csv_listener = can2pwm.CSVListener(log_dir="./", log_config=log_config)
+csv_listener = can2pwm.CSVListener(log_dir="./", log_name="calibration_test",log_config=log_config)
 
 # Provide the csv_listener to the notifier
 # Reception and logging of CAN messages will be handled by a separate thread
@@ -71,7 +77,11 @@ bus.send(pwm_msg)
 
 # 2. Step over range: 900 - 1200us
 # 60us steps should give 2mm
-for step in range(900, 2100, 60):
+start = 900
+# stop = 2100
+stop = 1200
+step = 60
+for step in range(start, stop, step):
     print(f"Stepping: {step}")
     pwm_packet = can2pwm.PWMCommandPacket(pwm = step)
     pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
