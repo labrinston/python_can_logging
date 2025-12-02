@@ -133,6 +133,22 @@ class TestDataclasses(unittest.TestCase):
         self.assertEqual(decoded.silence, test_silence)
         self.assertEqual(decoded.statusA, True)
         self.assertEqual(decoded.statusB, True)
+        
+    def test_PWMCommandPacket(self):
+        # Test values
+        test_pwm = 2100
+        # Expected values
+        # 50ms per bit => 0x01 for period & silence
+        # statusA & statusB enabled => 8 + 4 = 12 = 0xC0
+        expected_encoded = bytearray([0x08, 0x34])
+
+        original = icd.PWMCommandPacket(test_pwm)
+        encoded = original.to_can_bytes()
+        decoded = icd.PWMCommandPacket.from_can_bytes(encoded)
+
+        # Test the encode
+        self.assertEqual(expected_encoded, encoded)
+        self.assertEqual(test_pwm, decoded.pwm)
 
 if __name__ == '__main__':
     unittest.main()
