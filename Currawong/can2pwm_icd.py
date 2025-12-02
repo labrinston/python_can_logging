@@ -86,15 +86,15 @@ class can2pwm():
 
         def on_error(self, exc: Exception) -> None:
             raise NotImplementedError()
-
+      
     @dataclass 
     class PacketLogConfig():
-        enabled: bool = True
-        fields: list = None
-        _csv_beg: int = 0
-        _csv_end: int = 0
-        _csv_leader: str = ""
-        _csv_trailer:str = ""
+        enabled      : bool = True
+        fields       : list = None
+        _csv_beg     : int  = 0
+        _csv_end     : int  = 0
+        _csv_leader  : str  = ""
+        _csv_trailer : str  = ""
         
     class CSVListener(Listener):
         """
@@ -179,24 +179,20 @@ class can2pwm():
             end = 0
             for packet_name, config in self.log_config.items():
 
-                # print(f"Config: {packet_name} with {config}")
                 if not config.enabled:
                     continue
 
                 PacketClass = message_registry_by_name.get(packet_name)
                 logger.debug(f"Setting up: {PacketClass}")
-                # print(f"Retrieved class: {PacketClass}")
                 if not PacketClass:
                     continue
 
                 # Get fields config
                 fields = config.fields
-                # print(f"Fields to apply: {fields}")
                 logger.debug(f"Fields: {fields}")
 
                 # Concatenate headers
                 headers += PacketClass.csv_header(fields) 
-                # print(f"Headers: {headers}")
 
                 # Store position information in config
                 config._csv_beg = beg
@@ -231,45 +227,33 @@ class can2pwm():
 
             # Check if the message is from a can2pwm device
             device_type = (msg.arbitration_id >> 8) & 0xFF
-            # print(f"Device type: {device_type}")
             if device_type != can2pwm.DEVICE_TYPE:
                 return
 
             # Check that we have a data class to decode the data
             PacketClass = can2pwm.message_registry.get(msg_type)
-            # print(f"Packet Class: {PacketClass}")
             if not PacketClass:
                 print(f"Unknown message type: {msg_type}")
                 return
 
             # Decode the data
             packet = PacketClass.from_can_bytes(msg.data)
-            # print(f"Packet: {packet}")
 
             packet_name = PacketClass.__name__
             print(f"Packet Name: {packet_name}")
             print(f"Packet Data: {packet}")
-            # print(f"Log config: {self.log_config}")
-            # print(f"Log config: {self.log_config.get}")
             config = self.log_config.get(packet_name, {})
-            # print(f"{config}")
 
             # if not config.get('enabled', True):
             # if self.config or not self.config.enabled:
             #     return
 
-            # Move this to Packet class method
             fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
             defaults = [msg.timestamp] + [msg.arbitration_id]
             csv_str = defaults + config._csv_leader + csv_data + config._csv_trailer
             print(f"CSV str to write: {csv_str}")
-
-
-            # print(f"Logging {packet_name}: fields={fields_to_log}, packet={packet}")
-            # print(f"Logging: {csv_data}")            
-            # print(f"Logging: {csv_str}")            
 
             # Write to file here
             self.csv_writer.writerow(csv_str)
@@ -288,7 +272,7 @@ class can2pwm():
     @dataclass
     class PacketBase:
         """Base class for Currawong CANbus data packets"""
-
+        
         MESSAGE_TYPE = None
         
         def to_bytes(self) -> bytearray:
@@ -357,9 +341,9 @@ class can2pwm():
     class PWMCommandPacket(PacketBase):
         """"""
 
-        pwm: int # 0..1 I16 [us]
-
+        pwm: int  # 0..1 I16 [us] 
         MESSAGE_TYPE = 0x10
+
 
         def to_can_bytes(self):
             return bytearray([
@@ -371,7 +355,7 @@ class can2pwm():
             """"""
             if data is None:
                 return cls(None)
-
+ 
             pwm = int.from_bytes(data[0:3], 'big', signed=True)
             
             return cls(
@@ -388,18 +372,18 @@ class can2pwm():
         """Base structure of the statusA Telemetry Packet"""
 
         # Message fields (Instance variables)
-        status:        int            # 0..1     U16
-        inputMode:     'can2pwm.inputModes'     # 0:7..0:5 B3
-        feedbackMode:  'can2pwm.feedbackModes'  # 0:4..0:2 B3
-        validInput:    bool           # 0:1      B1
-        validFeedback: bool           # 0:0      B0
-        enabled:       bool           # 1:7      B1
-        reserved:      int            # 1:6..1:2 B5
-        mapEnabled:    bool           # 1:1      B1
-        mapInvalid:    bool           # 1:0      B1
-        command:       int            # 2..3     I16
-        feedback:      int            # 4..5     U16 Actual PWM value
-        pwm:           int            # 6..7     U16 [us]
+        status        : int                     # 0..1     U16
+        inputMode     : 'can2pwm.inputModes'    # 0:7..0:5 B3
+        feedbackMode  : 'can2pwm.feedbackModes' # 0:4..0:2 B3
+        validInput    : bool                    # 0:1      B1
+        validFeedback : bool                    # 0:0      B0
+        enabled       : bool                    # 1:7      B1
+        reserved      : int                     # 1:6..1:2 B5
+        mapEnabled    : bool                    # 1:1      B1
+        mapInvalid    : bool                    # 1:0      B1
+        command       : int                     # 2..3     I16
+        feedback      : int                     # 4..5     U16 Actual PWM value
+        pwm           : int                     # 6..7     U16 [us]
 
         # Class Variable
         MESSAGE_TYPE = 0x60
@@ -485,8 +469,6 @@ class can2pwm():
             current_scaled = int.from_bytes(data[0:2], 'big', signed=True) * 10
             voltage_scaled = int.from_bytes(data[2:4], 'big', signed=False) * 10
 
-            # voltage_scaled = voltage_raw * 10
-            # current_scaled = current_raw
             return cls(
                 current = current_scaled,
                 voltage = voltage_scaled
@@ -500,10 +482,10 @@ class can2pwm():
     @dataclass
     class serialNumberPacket:
         """Base structure of Telemetry Message"""
-        hwRev:int = None       # 0    U8
-        serialNumber:int = None # 1..3 U24
-        userIDA:int     = None # 4..5 U16
-        userIDB:int     = None # 6..7 U16
+        hwRev        :int = None # 0    U8
+        serialNumber :int = None # 1..3 U24
+        userIDA      :int = None # 4..5 U16
+        userIDB      :int = None # 6..7 U16
 
         message_type = 0x70
 
@@ -519,21 +501,26 @@ class can2pwm():
                 *(self.userIDB).to_bytes(2, 'big')
             ])
 
-
         @classmethod
         def from_can_bytes(cls, data):
             """Converts from bytearray to dataclass internal varialbes."""
-            hw     = data[0]
-            serial = int.from_bytes(data[1:4], 'big')
-            IDA    = int.from_bytes(data[4:6], 'big')
-            IDB    = int.from_bytes(data[6:8], 'big')
+
+            # This is needed to catch broadcast packets
+            # Otherwise we'll run aground on an IndexError
+            if len(data) == 0:
+                return cls(None)
+            else:
+
+                hw     = data[0]
+                serial = int.from_bytes(data[1:4], 'big')
+                IDA    = int.from_bytes(data[4:6], 'big')
+                IDB    = int.from_bytes(data[6:8], 'big')
             return cls(
                 hwRev = hw,
                 serialNumber = serial,
                 userIDA = IDA,
                 userIDB = IDB
-            )
-        
+            ) 
         
     # Message Type - 0x74
     @dataclass
@@ -615,7 +602,6 @@ class can2pwm():
         command:      int        # 0    U8
         serialNumber: int        # 1..4 U32 <-- wtf SerialNumber packet is U24??
         nodeID:       int        # 5    U8
-        # timestamp:    int        # TODO figure out correct type
 
         MESSAGE_TYPE  = 0x50
         COMMAND       = 0x50
@@ -672,7 +658,6 @@ class can2pwm():
         # ?Setup filter for serialNumber packets?
  
         # Setup broadcast of SerialNumber packet
-
         broadcast_id = 0xFF
         device_type = (0x0A << 8)  # TODO replace with enum
         can_id_base = 0x07700000 | device_type
@@ -698,22 +683,18 @@ class can2pwm():
 
             # Need to validate that the packet we're checking is a serialNumberPacket
             addr = rx_msg.arbitration_id & 0xFFFFFF00
-            print(f"addr: {addr:04X}")
-            if addr == can_id_base:
             deviceID = rx_msg.arbitration_id & 0xFF
             # We only want SerialNumberPackets from devices (_not_ the broadcast address 0xFF)
             if addr == can_id_base and  deviceID != 0xFF:
                 packet = can2pwm.serialNumberPacket.from_can_bytes(rx_msg.data)
                 if packet.serialNumber not in seen_serials:
-                    print(f"Fresh out of the packet: {packet.serialNumber:04X}")
+                    
                     seen_serials.add(packet.serialNumber)
-                    # Only add to our device list if it's a new serial number 
-                    print(f"can ID: {rx_msg.arbitration_id:X} | addr: {addr:X}")
-                    deviceID = rx_msg.arbitration_id & 0xFF
-                    print(f"deviceID: {deviceID:X}")
-                    devices_tuple.append((packet.serialNumber, deviceID))
-                    # COULD create devices here?
 
+                    # Only add to our device list if it's a new serial number 
+                    deviceID = rx_msg.arbitration_id & 0xFF
+
+                    devices_tuple.append((packet.serialNumber, deviceID))
 
         # Notify user if we didn't find any devices        
         if devices_tuple is None:
