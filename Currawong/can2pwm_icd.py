@@ -354,7 +354,7 @@ class can2pwm():
             ])
 
     @dataclass
-    class PWMCommandPacket:
+    class PWMCommandPacket(PacketBase):
         """"""
 
         pwm: int # 0..1 I16 [us]
@@ -363,12 +363,20 @@ class can2pwm():
 
         def to_can_bytes(self):
             return bytearray([
-                *self.pwm.to_bytes(1, 'big', signed=True)
+                *self.pwm.to_bytes(2, 'big', signed=True)
             ])
 
-        # @classmethod 
-        # def from_can_bytes(cls, data):
-        #     """"""
+        @classmethod 
+        def from_can_bytes(cls, data):
+            """"""
+            if data is None:
+                return cls(None)
+
+            pwm = int.from_bytes(data[0:3], 'big', signed=True)
+            
+            return cls(
+                pwm = pwm
+            )
 
     # ----- Eng Commands Packets        ----- #
 
