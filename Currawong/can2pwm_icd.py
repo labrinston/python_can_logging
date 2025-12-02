@@ -700,6 +700,9 @@ class can2pwm():
             addr = rx_msg.arbitration_id & 0xFFFFFF00
             print(f"addr: {addr:04X}")
             if addr == can_id_base:
+            deviceID = rx_msg.arbitration_id & 0xFF
+            # We only want SerialNumberPackets from devices (_not_ the broadcast address 0xFF)
+            if addr == can_id_base and  deviceID != 0xFF:
                 packet = can2pwm.serialNumberPacket.from_can_bytes(rx_msg.data)
                 if packet.serialNumber not in seen_serials:
                     print(f"Fresh out of the packet: {packet.serialNumber:04X}")
