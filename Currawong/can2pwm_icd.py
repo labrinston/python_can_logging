@@ -121,50 +121,68 @@ class can2pwm():
             self.log_name = log_name
             self.csv_files = {}
 
+            # Create the csv file
+            date_slug = "_" + time.strftime("%Y-%m-%d %H:%M:%S")
+            file_path = log_dir + log_name + date_slug
+            if os.path.exists(file_path):
+                response = input(f"File {filename} exists. Overwrite?")
+                if response.lower() == "y":
+                    os.makedirs(log_dir, exist_ok=True)
+                    self.log_path = file_path
+                    self.csv_file = open(f"{file_path}.csv", "w", newline="")
+                else:
+                    response = input(f"New name?")
+                    file_path = file_path + response + date_slug
+                    print(f"Writing to: {file_path}.")
+                    self.csv_file = open(f"{file_path}.csv", "w", newline="")
+            else:
+                self.csv_file = open(f"{file_path}.csv", "w", newline="")
+
+            # Create the csv writer
+            self.csv_writer = csv.writer(self.csv_file)
+
             # Add optional flexibility here
             # Dict -> Dataclass conversion?
 
             # If no config was passed, use the default
             if log_config is None:
-                self.log_config ={
-                    'statusAPacket': can2pwm.PacketLogConfig(enabled=True, fields=['feedback', 'command']),
-                    'statusBPacket': can2pwm.PacketLogConfig(enabled=True, fields=['current', 'voltage']) 
+                self.log_config = {
+                    "statusAPacket": can2pwm.PacketLogConfig(
+                        enabled=True, fields=["feedback", "command"]
+                    ),
+                    "statusBPacket": can2pwm.PacketLogConfig(
+                        enabled=True, fields=["current", "voltage"]
+                    ),
                 }
             else:
-                # Otherwise 
+                # Otherwise
                 self.log_config = {
                     # Handle:
                     # 1. Plain Dicts - via dict comprehension to unpack (**) into a dataclass
                     # 2, Dict of datclasses - use as is and log into self
-                    name: can2pwm.PacketLogConfig(**cfg) if isinstance(cfg, dict) else cfg
+                    name: (
+                        can2pwm.PacketLogConfig(**cfg) if isinstance(cfg, dict) else cfg
+                    )
                     for name, cfg in log_config.items()
                 }
-                print("After conversion:")
-                for name, cfg in self.log_config.items():
-                    print(f"  {name}: type={type(cfg)}, value={cfg}")
-            
-            print(f"Applying the following logging config:")
-            print(f"{self.log_config}")
-            header_row = self._setup_table()            
 
-            # Open file
-            os.makedirs(self.log_dir, exist_ok=True)
-
-            self.csv_file = open(f"{self.log_dir}/{self.log_name}.csv", 'w', newline='')
-            self.csv_writer = csv.writer(self.csv_file) 
-            
             # Write headers
-            print(f"Printing Headers: {header_row}")
-            self.csv_writer.writerow(header_row) 
+            header_row = self._setup_table()
+            self.csv_writer.writerow(header_row)
 
         def _setup_table(self):
             """Creates csv header and calculates csv leaders and trailers for each packet that is configured to
             be logged."""
 
             # This should probably just be a class variable
-            message_registry_by_name = {cls.__name__: cls for cls in can2pwm.message_registry.values()}
-            default_headers = ["timestamp", "CAN-ID"] # Must be prepended _after_ header setup
-            
+            message_registry_by_name = {
+                cls.__name__: cls for cls in can2pwm.message_registry.values()
+            }
+            default_headers = [
+                "timestamp",
+                "CAN-ID",
+            ]  # Must be prepended _after_ header setup
+
             # Dynamic Header Setup
             #  0 1 2 3 4 5  Index
             # |P|P|X|X|N|N|
