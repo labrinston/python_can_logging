@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 
-from can import Listener, Message
-import dataclasses
-from dataclasses import dataclass
-from enum import Enum
 import csv
 import logging
 import os
 import time
+from pathlib import Path
+from can import Listener, Message
+import dataclasses
+from dataclasses import dataclass
+from enum import Enum
 
 logger = logging.getLogger(__name__)
 
