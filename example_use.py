@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
-import can
 import time
+import can
+import logging
 from Currawong.can2pwm_icd import can2pwm
 from cli import commissioning_cli as cli
 
@@ -10,6 +11,18 @@ from cli import commissioning_cli as cli
 parser = cli.parse_cli()
 args = parser.parse_args()
 
+# ---- Configure Stdout Logging ---- #
+
+logging.basicConfig(
+    # Set based on cli args
+    level=args.loglevel.upper(),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        # logging.FilerHandler('can2pwm.log'),
+        logging.StreamHandler()
+    ],
+)
+logger = logging.getLogger(__name__)
 
 # ---- Bus Setup ---- #
 
