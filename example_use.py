@@ -3,6 +3,13 @@
 import can
 import time
 from Currawong.can2pwm_icd import can2pwm
+from cli import commissioning_cli as cli
+
+# ---- Handle Command-line Arguments ---- #
+
+parser = cli.parse_cli()
+args = parser.parse_args()
+
 
 # ---- Bus Setup ---- #
 
@@ -19,16 +26,19 @@ bus = can.Bus(channel = 'can0', interface='socketcan', receive_own_messages=True
 dev_tuple = can2pwm.discover_devices(bus)
 print(f"Found: {dev_tuple}")
 
-# ---- Set NodeIDs ---- #
+    # ---- (Optional) Set NodeIDs ---- #
 
-new_ids = [ 0x23, 0x44 ]
-for serial_num, curr_id in dev_tuple:
-    for new_id in new_ids:
-        packet = can2pwm.setNodeIDPacket(serial_num, new_id)
-        print(f"Packet: {packet}")
-        message = can2pwm.make_message(packet, curr_id)
-        print(f"setNodeID: {message}")
-        bus.send(message)
+    if args.dev_ids:
+        print(f"Setting Device IDs: {args.dev_ids}")
+        for serial_num, curr_id in dev_tuple:
+            for new_id in args.dev_ids:
+                packet = can2pwm.setNodeIDPacket(serial_num, new_id)
+                print(f"Packet: {packet}")
+                message = can2pwm.make_message(packet, curr_id)
+                print(f"setNodeID: {message}")
+                bus.send(message)
+    else:
+        print("Skipping -- Set Device IDs (No IDs passed via --dev_ids).")
 
 # ---- Enable Telemetry ---- #
 
