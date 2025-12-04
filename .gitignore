@@ -1,3 +1,7 @@
 # Python cruft
 .venv/
 __pycache__/
+
+# Logging cruft
+*.log
+*.csv
