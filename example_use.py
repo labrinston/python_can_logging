@@ -45,7 +45,7 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     # ---- (Optional) Set NodeIDs ---- #
 
     if args.dev_ids:
-        logger.info("Setting %s as new device IDs", dev_ids)
+        logger.info("Setting %s as new device IDs", args.dev_ids)
         print(f"Setting Device IDs: {args.dev_ids}")
         for serial_num, curr_id in dev_tuple:
             for new_id in args.dev_ids:
