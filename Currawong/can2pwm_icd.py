@@ -4,6 +4,7 @@ import csv
 import logging
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 from can import Listener, Message
 import dataclasses
@@ -180,7 +181,8 @@ class can2pwm():
             }
             default_headers = [
                 "timestamp",
-                "CAN-ID",
+                "CAN ID",
+                "device ID",
             ]  # Must be prepended _after_ header setup
 
             # Dynamic Header Setup
@@ -274,7 +276,12 @@ class can2pwm():
             fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
-            defaults = [msg.timestamp] + [msg.arbitration_id]
+            defaults = (
+                [datetime.fromtimestamp(msg.timestamp)]
+                # + [msg.arbitration_id ]
+                + [f"{msg.arbitration_id:X}"]
+                + [f"{(msg.arbitration_id & 0xFF):X}"]
+            )
             csv_str = defaults + config._csv_leader + csv_data + config._csv_trailer
             print(f"CSV str to write: {csv_str}")
 
