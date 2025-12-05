@@ -85,16 +85,14 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     # Request listeners from the can2pwm module
     print_listener = can2pwm.PrintListener()
     csv_listener = can2pwm.CSVListener(
-        log_dir="./", log_name="calibration_test", log_config=log_config
+        log_dir=args.log_dir, log_name=args.file_name, log_config=log_config
     )
 
     # Provide the csv_listener to the notifier
     # Reception and logging of CAN messages will be handled by a separate thread
     notifier = can.Notifier(bus, [csv_listener])
 
-    # ------------------- #
-
-    # TODO Example transmission code
+    # ---- Transmission ---- #
 
     time.sleep(2)
 

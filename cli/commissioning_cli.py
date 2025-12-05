@@ -36,11 +36,21 @@ def parse_cli():
 
     # File path to write logs too
     parser.add_argument(
-        "-p", "--file_path", type=str, help="Path at which to create log files."
+        "-ld",
+        "--log_dir",
+        type=str,
+        default="./",  # TODO change to ./logs and add logic to check for/create dir
+        help="Path at which to create log files.",
     )
 
     # File name for logs
-    parser.add_argument("-f", "--file_name", type=str, help="Base name for log files.")
+    parser.add_argument(
+        "-f",
+        "--file_name",
+        type=str,
+        default="mightyzap_comm",
+        help="Base name for log files.",
+    )
 
     # (Optional) List of device IDs to set
     parser.add_argument(
