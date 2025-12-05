@@ -26,7 +26,6 @@ logger = logging.getLogger(__name__)
 
 # ---- Bus Setup ---- #
 # Linux
-# bus = can.Bus(channel="can0", interface="socketcan", receive_own_messages=True)
 with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) as bus:
 
     # Windows
@@ -35,6 +34,7 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     # ---- Find Currawong Devices ---- #
 
     dev_tuple = can2pwm.discover_devices(bus)
+    logger.info("Devices: %s", dev_tuple)
     if dev_tuple:
         print(f"Found: {dev_tuple}")
     else:
@@ -68,8 +68,6 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     bus.send(telem_message)
 
     # ---- Listener Setup ---- #
-    # Turn own receiving own messages
-    # bus.receive_own_messages=True
 
     # Create logging config (Note: this only applies to the can2pwm CSVListener)
     log_config = {
@@ -105,18 +103,44 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
     bus.send(pwm_msg)
 
-    # 2. Step over range: 900 - 1200us
+    # 2. Step over range: 900 - 2100us (should be full range)
     # 60us steps should give 2mm
-    START = 900
-    # stop = 2100
-    STOP = 1200
     STEP = 60
+    START = 900
+    STOP = (
+        2100 + STEP
+    )  # full range, NOTE: range() is exclusive of stop - hence the extra 60
+    # STOP = 1200 + STEP  # shorter range for testing
     for step in range(START, STOP, STEP):
         print(f"Stepping: {step}")
         pwm_packet = can2pwm.PWMCommandPacket(pwm=step)
         pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
         bus.send(pwm_msg)
         time.sleep(2)
+
+    # 3. Sweep over full - no steps
+    # 3.1 Retract
+    pwm_packet = can2pwm.PWMCommandPacket(pwm=900)
+    pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
+    bus.send(pwm_msg)
+
+    # Wait? Don't currently have way to receive feedback via the main thread
+    time.sleep(5)
+
+    # 3.2 Extend
+    pwm_packet = can2pwm.PWMCommandPacket(pwm=2100)
+    pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
+    bus.send(pwm_msg)
+
+    # Wait? Don't currently have way to receive feedback via the main thread
+    time.sleep(5)
+
+    # 3.2 Retract
+    pwm_packet = can2pwm.PWMCommandPacket(pwm=900)
+    pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
+    bus.send(pwm_msg)
+
+    # Fin
 
     # Shut down the notifier thread
     # Will the bus context manager handle these?
