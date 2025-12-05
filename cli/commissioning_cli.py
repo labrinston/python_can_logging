@@ -61,7 +61,6 @@ def parse_cli():
         # '*' == 0 or more
         # '?' == 0 or 1
         nargs="*",
-        action="append",
         type=valid_device_id,
         # choices=list(range(0x00, 0xFF, 0x01)),
         help="List of device IDs to set.",
