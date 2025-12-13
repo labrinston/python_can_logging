@@ -138,7 +138,7 @@ class can2pwm:
             self.csv_files = {}
 
             # Create the csv file
-            date_slug = "_" + time.strftime("%Y-%m-%d %H:%M:%S")
+            date_slug = "_" + time.strftime("%Y-%m-%d_%H-%M-%S")
             file_path = log_dir + "/" + log_name + date_slug
             logger.info("Creating: %s", file_path)
             if os.path.exists(file_path):
@@ -201,7 +201,7 @@ class can2pwm:
                 cls.__name__: cls for cls in can2pwm.message_registry.values()
             }
             default_headers = [
-                "timestamp",
+                "Timestamp",
                 "CAN ID",
                 "device ID",
             ]  # Must be prepended _after_ header setup
