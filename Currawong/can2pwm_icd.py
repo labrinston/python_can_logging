@@ -347,6 +347,7 @@ class can2pwm:
                 return [f.name for f in dataclasses.fields(cls)]
             else:
                 # Should probably validate the fields so we can fail at header construction instead of on data retrival
+                # logger.info("Fields to log: %s", fields)
                 return fields
 
         def to_csv(self, fields=None):
@@ -437,15 +438,18 @@ class can2pwm:
 
         # Message fields (Instance variables)
         # fmt: off
+        # Byte 0
         status        : int                     # 0..1     U16
         inputMode     : "can2pwm.inputModes"    # 0:7..0:5 B3
         feedbackMode  : "can2pwm.feedbackModes" # 0:4..0:2 B3
         validInput    : bool                    # 0:1      B1
         validFeedback : bool                    # 0:0      B0
+        # Byte 1
         enabled       : bool                    # 1:7      B1
         reserved      : int                     # 1:6..1:2 B5
         mapEnabled    : bool                    # 1:1      B1
         mapInvalid    : bool                    # 1:0      B1
+        # Bytes 2-7
         command       : int                     # 2..3     I16
         feedback      : int                     # 4..5     U16 Actual PWM value
         pwm           : int                     # 6..7     U16 [us]
@@ -455,51 +459,65 @@ class can2pwm:
         # Masks & shifts
         # Status 0..1
         # Byte 0
-        INPUT_MODE_MASK      = 0xC0   # 0:7..0:5
-        INPUT_MODE_SHIFT     = 5
-        FEEDBACK_MODE_MASK   = 0x1B   # 0:4..0:2
-        FEEDBACK_MODE_SHIFT  = 2
-        VALID_INPUT_MASK     = 0x2    # 0:1
-        VALID_INPUT_SHIFT    = 1
-        VALID_FEEDBACK_MASK  = 0x1    # 0:0
-        VALID_FEEDBACK_SHIFT = 0
+        _input_mode_mask      = 0xC0   # 0:7..0:5
+        _input_mode_shift     = 5
+        _feedback_mode_mask   = 0x1C   # 0:4..0:2
+        _feedback_mode_shift  = 2
+        _valid_input_bit      = 1      # 0:1
+        _valid_feedback_bit   = 0      # 0:0
         # Byte 1
-        ENABLED_MASK         = 0x8000 # 1:7
-        ENABLED_SHIFT        = 15
-        RESERVED_MASK        = 0x7C00 # 1:6..1:2
-        RESEREVED_SHIFT      = 10
-        MAP_ENABLED_MASK     = 0x200  # 1:1
-        MAP_ENABLED_SHIFT    = 9
-        MAP_INVALID_MASK     = 0x100  # 1:0
-        MAP_INVALID_SHIFT    = 8
+        _enabled_bit          = 15     # 1:7
+        _reserved_mask        = 0x7C00 # 1:6..1:2
+        _reserved_shift       = 10
+        _map_enabled_bit      = 9      # 1:1
+        _map_invalid_bit      = 8      # 1:0
         # fmt: on
 
         # Telemetry is only received therefore no to_bytes method is needed
         # EXCEPT - if you're polling, in which case data = []
+        # def to_can_bytes(self):
+        #     # status_value = (*self.status.to_bytes(2, "big"))
+        #     return bytearray(
+        #         [
+        #             # 0..1
+        #             *self.status.to_bytes(2, "big"),
+        #             # 2..3
+        #             *self.command.to_bytes(2, "big", signed=True),
+        #             # 4..5
+        #             *self.feedback.to_bytes(2, "big"),
+        #             # 6..7
+        #             *self.pwm.to_bytes(2, "big"),
+        #         ]
+        #     )
 
         @classmethod
         def from_can_bytes(cls, data):
-            status_value = int.from_bytes(data[0:2], "big")
-            command_value = int.from_bytes(data[2:4], "big")
+
+            # fmt: off
+            status_value   = int.from_bytes(data[0:2], "big")
+            command_value  = int.from_bytes(data[2:4], "big", signed=True)
             feedback_value = int.from_bytes(data[4:6], "big")
-            pwm_value = int.from_bytes(data[6:8], "big")
+            # logger.info("Feedback: %s", feedback_value)
+            pwm_value      = int.from_bytes(data[6:8], "big")
             return cls(
-                status=status_value,
-                inputMode=get_bits(
-                    status_value, cls.INPUT_MODE_MASK, cls.INPUT_MODE_SHIFT
+                status        = status_value,
+                inputMode     = get_bits(
+                    status_value, cls._input_mode_mask, cls._input_mode_shift
                 ),
-                feedbackMode=get_bits(
-                    status_value, cls.FEEDBACK_MODE_MASK, cls.FEEDBACK_MODE_SHIFT
+                feedbackMode  = get_bits(
+                    status_value, cls._feedback_mode_mask, cls._feedback_mode_shift
                 ),
-                validInput=bool(get_bit(status_value, 1)),
-                validFeedback=bool(get_bit(status_value, 0)),
-                enabled=bool(get_bit(status_value, 15)),
-                reserved=get_bits(status_value, cls.RESERVED_MASK, 2),
-                mapEnabled=bool(get_bit(status_value, 9)),
-                mapInvalid=bool(get_bit(status_value, 8)),
-                command=command_value,
-                feedback=feedback_value,
-                pwm=pwm_value,
+                validInput    = bool(get_bit(status_value, cls._valid_input_bit)),
+                validFeedback = bool(get_bit(status_value, cls._valid_feedback_bit)),
+                # Byte 1
+                enabled       = bool(get_bit(status_value, cls._enabled_bit)),
+                reserved      = get_bits(status_value, cls._reserved_mask, cls._reserved_shift),
+                mapEnabled    = bool(get_bit(status_value, cls._map_enabled_bit)),
+                mapInvalid    = bool(get_bit(status_value, cls._map_invalid_bit)),
+                command       = command_value,
+                feedback      = feedback_value,
+                pwm           = pwm_value,
+                # fmt: on
             )
 
     # Message Type - 0x61
@@ -832,8 +850,10 @@ class can2pwm:
     # ----- End System Command Packets  ----- #
 
     # can2pwm message registry
+    # TODO there has got to be a less manual way of doing this
     message_registry = {
         0x10: PWMCommandPacket,
+        0x50: setNodeIDPacket,
         0x60: statusAPacket,
         0x61: statusBPacket,
         0x80: configPacket,
