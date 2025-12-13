@@ -669,6 +669,130 @@ class can2pwm:
                 _reserved=packets_byte & cls.MASK_RESERVED,
             )
 
+    @dataclass
+    class configPacket:
+        """Base structure of Config Packet"""
+
+        # TODO: Decide how to handle the "piccolo" field:
+        # - should it be exposed at all?
+        # - if it is exposed - setting piccolo, [enabled, channel, reserved] should be mutually exclusive
+        # fmt: off
+        enabled          : bool       # 0:7      B1 
+        channel          : int        # 0:6..0:2 B5
+        reserved         : int        # 0:1..0:0 B2
+        timeout          : int        # 1        U8 100ms per bit
+        timeoutAction    : int        # 2:7..2:5 B3
+        feedbackAction   : int        # 2:4..2:2 B3
+        commandEmulation : int        # 2:1..2:0 B2
+        home             : int = None # 3..4     U16 (Optional) [us]
+        _piccolo         : int = 0    # 0        U8
+         
+        message_type             = 0x80
+        min_bytes                = 3
+        max_bytes                = 5
+        # Byte 0
+        _enabled_shift           = 7
+        _enabled_mask            = 0x80
+        _channel_shift           = 2
+        _channel_mask            = 0x7C
+        _reserved_shift          = 0
+        _reserved_mask           = 0x03
+        # Byte 2
+        _timeoutAction_shift     = 5
+        _timeoutAction_mask      = 0xE0
+        _feedbackAction_shift    = 2
+        _feedbackAction_mask     = 0x1A
+        _commandEmulation_shift  = 0
+        _commandEmulation_mask   = 0x03
+        # fmt: on
+
+        def __post_init__(self):
+            # Build the piccolo field from enabled, channel, reserved
+            self._piccolo = (
+                (int(self.enabled) << self._enabled_shift)
+                | (self.channel << self._channel_shift)
+                | (self.reserved << self._reserved_shift)
+            )
+            if self.timeout % 100:
+                raise ValueError(
+                    f"Timeout must be a min. and divisible by 100ms (0 = no timeout). Got: {self.timeout}"
+                )
+
+        def to_can_bytes(self):
+            byte2_value = (
+                (self.timeoutAction << self._timeoutAction_shift)
+                | (self.feedbackAction << self._feedbackAction_shift)
+                | (self.commandEmulation << self._commandEmulation_shift)
+            )
+            timeout_val = self.timeout // 100
+            # Home is optional - check if it was supplied
+            if self.home is not None:
+                data = bytearray(
+                    [
+                        # Byte 0
+                        *(self._piccolo).to_bytes(1, "big"),
+                        # Byte 1
+                        *(timeout_val).to_bytes(1, "big"),
+                        # Byte 2
+                        *(byte2_value).to_bytes(1, "big"),
+                        # Bytes 3..4
+                        *(self.home).to_bytes(2, "big"),
+                    ]
+                )
+            else:
+                data = bytearray(
+                    [
+                        # Byte 0
+                        *(self._piccolo).to_bytes(1, "big"),
+                        # Byte 1
+                        *(self.timeout).to_bytes(1, "big"),
+                        # Byte 2
+                        *byte2_value.to_bytes(1, "big"),
+                    ]
+                )
+
+            print(f"Encode data bytes: {data.hex()}")
+            return data
+
+        @classmethod
+        def from_can_bytes(cls, data):
+
+            piccolo_byte = data[0]
+            # timeoutAction_val = get_bits(
+            #     data[2], cls._timeoutAction_mask, cls._timeoutAction_shift
+            # )
+            if len(data) == cls.min_bytes:
+                home_val = None
+            elif len(data) == cls.max_bytes:
+                home_val = int.from_bytes(data[3:5], "big")
+            else:
+                raise ValueError(
+                    f"Data length error! Expected {cls.min_bytes}-{cls.max_bytes}bytes data. Got {len(data)}"
+                )
+            return cls(
+                # Byte 0
+                _piccolo=piccolo_byte,
+                enabled=bool(get_bit(piccolo_byte, cls._enabled_shift)),
+                channel=get_bits(piccolo_byte, cls._channel_mask, cls._channel_shift),
+                reserved=get_bits(
+                    piccolo_byte, cls._reserved_mask, cls._reserved_shift
+                ),
+                # Byte 1
+                timeout=data[1] * 100,
+                # Byte 2
+                timeoutAction=get_bits(
+                    data[2], cls._timeoutAction_mask, cls._timeoutAction_shift
+                ),
+                feedbackAction=get_bits(
+                    data[2], cls._feedbackAction_mask, cls._feedbackAction_shift
+                ),
+                commandEmulation=get_bits(
+                    data[2], cls._commandEmulation_mask, cls._commandEmulation_shift
+                ),
+                # Bytes 3..4
+                home=home_val,
+            )
+
     # ----- End Configuration Packets   ----- #
     # ----- System Command Packets      ----- #
     @dataclass
@@ -712,6 +836,7 @@ class can2pwm:
         0x10: PWMCommandPacket,
         0x60: statusAPacket,
         0x61: statusBPacket,
+        0x80: configPacket,
     }
 
     # ---- Helper Methods --------- #
