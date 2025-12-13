@@ -32,7 +32,6 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     # with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) as bus:
 
     # ---- Find Currawong Devices ---- #
-
     dev_tuple = can2pwm.discover_devices(bus)
     logger.info("Devices: %s", dev_tuple)
     if dev_tuple:
@@ -47,13 +46,16 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     if args.dev_ids:
         logger.info("Setting %s as new device IDs", args.dev_ids)
         print(f"Setting Device IDs: {args.dev_ids}")
-        for serial_num, curr_id in dev_tuple:
-            for new_id in args.dev_ids:
-                packet = can2pwm.setNodeIDPacket(serial_num, new_id)
-                print(f"Packet: {packet}")
-                message = can2pwm.make_message(packet, curr_id)
-                print(f"setNodeID: {message}")
-                bus.send(message)
+
+        for (serial_num, curr_id), new_id in zip(dev_tuple, args.dev_ids):
+            # for serial_num, curr_id in dev_tuple:
+            #     for new_id in args.dev_ids:
+            logger.info("Mapping - Serial No. %s to Device ID %s", serial_num, new_id)
+            packet = can2pwm.setNodeIDPacket(serial_num, new_id)
+            print(f"Packet: {packet}")
+            message = can2pwm.make_message(packet, curr_id)
+            print(f"setNodeID: {message}")
+            bus.send(message)
     else:
         print("Skipping -- Set Device IDs (No IDs passed via --dev_ids).")
     # ---- Enable Telemetry ---- #
@@ -64,8 +66,22 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     )
     # Create a broadcast message - 0xFF
     telem_message = can2pwm.make_message(telem_packet, 0xFF)
-    print(f"{telem_message}")
+    logger.info("Sending: %s", telem_message)
     bus.send(telem_message)
+
+    # Configure Analog feedback mode
+    config_packet = can2pwm.configPacket(
+        enabled=True,
+        channel=0,
+        reserved=0,
+        timeout=0,
+        timeoutAction=0,
+        feedbackAction=4,  # 4 = Analog feedback
+        commandEmulation=0,
+    )
+    config_message = can2pwm.make_message(config_packet, 0xFF)
+    bus.send(config_message)
+    logger.info("Sending: %s", config_message)
 
     # ---- Listener Setup ---- #
 
@@ -73,7 +89,15 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
     log_config = {
         "PWMCommandPacket": can2pwm.PacketLogConfig(enabled=True, fields=["pwm"]),
         "statusAPacket": can2pwm.PacketLogConfig(
-            enabled=True, fields=["feedback", "command", "pwm"]
+            enabled=True,
+            fields=[
+                "feedbackMode",
+                "validFeedback",
+                "reserved",
+                "feedback",
+                "command",
+                "pwm",
+            ],
         ),
         "statusBPacket": can2pwm.PacketLogConfig(
             enabled=True, fields=["current", "voltage"]
@@ -111,8 +135,9 @@ with can.Bus(channel="can0", interface="socketcan", receive_own_messages=True) a
         2100 + STEP
     )  # full range, NOTE: range() is exclusive of stop - hence the extra 60
     # STOP = 1200 + STEP  # shorter range for testing
+    logger.info("Stepping from: %s to %s in steps of %s", START, STOP, STEP)
     for step in range(START, STOP, STEP):
-        print(f"Stepping: {step}")
+        logger.info("Stepping: %s", step)
         pwm_packet = can2pwm.PWMCommandPacket(pwm=step)
         pwm_msg = can2pwm.make_message(pwm_packet, 0xFF)
         bus.send(pwm_msg)
