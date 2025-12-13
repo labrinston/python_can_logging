@@ -203,7 +203,9 @@ class can2pwm:
             default_headers = [
                 "Timestamp",
                 "CAN ID",
-                "device ID",
+                "Packet Name",
+                "Device ID",
+                "Payload (Raw)",
             ]  # Must be prepended _after_ header setup
 
             # Dynamic Header Setup
@@ -287,8 +289,10 @@ class can2pwm:
             # Decode the data
             packet = PacketClass.from_can_bytes(msg.data)
             packet_name = PacketClass.__name__
+            packet_name_clean = packet_name.strip("{}'")
             config = self.log_config.get(packet_name, {})
-            logger.debug("Decoded packet:\n%s", packet)
+            raw_data = "".join(f"{byte:02X}" for byte in msg.data)
+            # logger.info("Decoded packet:\n%s", packet)
 
             # if not config.get('enabled', True):
             # if self.config or not self.config.enabled:
@@ -297,12 +301,16 @@ class can2pwm:
             fields_to_log = config.fields
 
             csv_data = packet.to_csv(fields_to_log)
+            # logger.info("CSV data: %s", csv_data)
             defaults = (
                 [datetime.fromtimestamp(msg.timestamp)]
                 + [f"{msg.arbitration_id:X}"]
+                + [f"{packet_name_clean}"]
                 + [f"{(msg.arbitration_id & 0xFF):X}"]
+                + [f"{raw_data}"]
             )
             csv_str = defaults + config._csv_leader + csv_data + config._csv_trailer
+            # logger.info("CSV row: %s", csv_str)
 
             # Write to file here
             self.csv_writer.writerow(csv_str)
